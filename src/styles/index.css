@@ -1,0 +1,95 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Identidade Mosaico: papel quente + terracota + toque de sol.
+   Tokens em RGB para permitir opacidade (bg-brand/10) e tema escuro. */
+:root {
+  --bg: 250 246 240;
+  --surface: 255 255 255;
+  --ink: 31 27 22;
+  --muted: 107 98 88;
+  --line: 232 225 214;
+  --brand: 217 72 38;
+  --brand-ink: 255 255 255;
+  --sun: 245 184 65;
+  color-scheme: light;
+}
+
+.dark {
+  --bg: 22 19 17;
+  --surface: 33 29 26;
+  --ink: 245 240 232;
+  --muted: 160 150 138;
+  --line: 56 50 45;
+  --brand: 240 108 70;
+  --brand-ink: 26 15 10;
+  --sun: 245 184 65;
+  color-scheme: dark;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-bg font-sans text-ink antialiased;
+    transition: background-color 0.25s ease, color 0.25s ease;
+  }
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-brand;
+    outline-style: solid;
+  }
+  ::selection {
+    background: rgb(var(--sun) / 0.5);
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-medium
+      transition active:scale-95 disabled:pointer-events-none disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply bg-brand text-brand-ink hover:brightness-110;
+  }
+  .btn-ghost {
+    @apply bg-transparent text-ink hover:bg-ink/5;
+  }
+  .btn-outline {
+    @apply border border-line bg-surface text-ink hover:border-ink/30;
+  }
+  .btn-icon {
+    @apply h-10 w-10 p-0;
+  }
+  .field {
+    @apply w-full rounded-xl border border-line bg-surface px-3.5 py-2.5 text-sm text-ink
+      placeholder:text-muted/70 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20;
+  }
+  .label {
+    @apply mb-1.5 block text-xs font-medium uppercase tracking-wide text-muted;
+  }
+}
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: rgb(var(--ink) / 0.06);
+}
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgb(var(--ink) / 0.06), transparent);
+  animation: shimmer 1.4s infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
