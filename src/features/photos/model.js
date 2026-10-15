@@ -2,7 +2,7 @@
  * Modelo único de foto usado em toda a aplicação, venha ela do Pexels,
  * do Supabase ou do modo local:
  * { id, source, title, category, url, thumb, width, height, color,
- *   author, authorUrl, createdAt, ownerId, isPublic }
+ *   author, authorUrl, createdAt, ownerId, privacy }
  */
 export const photoKey = (photo) => `${photo.source}:${photo.id}`;
 
@@ -21,25 +21,30 @@ export function fromPexels(raw, category = null) {
     authorUrl: raw.photographer_url,
     createdAt: null,
     ownerId: null,
-    isPublic: true,
+    privacy: 'public',
   };
 }
 
-export function fromRow(row, publicUrl) {
+/** Converte uma linha da tabela `items` em foto. `signedUrl` só é usado em uploads. */
+export function fromItem(item, signedUrl) {
+  const meta = item.metadata ?? {};
+  const isExternal = item.source !== 'upload';
+  const url = isExternal ? meta.url : signedUrl;
+  if (!url) return null;
   return {
-    id: row.id,
-    source: 'user',
-    title: row.title,
-    category: row.category,
-    url: publicUrl,
-    thumb: publicUrl,
-    width: row.width,
-    height: row.height,
-    color: null,
-    author: null,
-    authorUrl: null,
-    createdAt: row.created_at,
-    ownerId: row.owner_id,
-    isPublic: row.is_public,
+    id: isExternal ? item.external_id : item.id,
+    source: isExternal ? item.source : 'user',
+    title: item.title,
+    category: item.tags?.[0] ?? null,
+    url,
+    thumb: isExternal ? meta.thumb || url : url,
+    width: item.width,
+    height: item.height,
+    color: meta.color ?? null,
+    author: meta.author ?? null,
+    authorUrl: meta.authorUrl ?? null,
+    createdAt: item.created_at,
+    ownerId: item.owner_id,
+    privacy: item.privacy,
   };
 }

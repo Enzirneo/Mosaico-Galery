@@ -46,7 +46,7 @@ export function createLocalRepository() {
         authorUrl: null,
         createdAt: new Date().toISOString(),
         ownerId: 'local',
-        isPublic: false,
+        privacy: 'private',
       };
       write(PHOTOS_KEY, [photo, ...read(PHOTOS_KEY)]);
       return photo;

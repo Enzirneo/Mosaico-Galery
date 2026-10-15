@@ -1,25 +1,41 @@
 import { prepareImage } from '../../lib/image';
-import { fromRow } from '../../features/photos/model';
+import { fromItem } from '../../features/photos/model';
 
-const BUCKET = 'photos';
+const BUCKET = 'media';
+const SIGNED_URL_TTL = 60 * 60; // 1 h; recarregar a página gera links novos
+const DUPLICATE = '23505';
 
-/** Repositório com Supabase: Postgres (RLS) + Storage. */
+/**
+ * Repositório com Supabase. Fala só com as tabelas `items` e `reactions`
+ * (mais a função `save_external_item`) e com o bucket fechado `media`.
+ */
 export function createRemoteRepository(supabase) {
-  const publicUrl = (path) => supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
-  const toPhoto = (row) => fromRow(row, publicUrl(row.storage_path));
+  /** Uploads precisam de link temporário: gera todos de uma vez, em 1 chamada. */
+  async function toPhotos(items) {
+    const paths = items.map((i) => i.storage_path).filter(Boolean);
+    const urls = new Map();
+    if (paths.length) {
+      const { data, error } = await supabase.storage.from(BUCKET).createSignedUrls(paths, SIGNED_URL_TTL);
+      if (error) throw error;
+      data.forEach((entry) => entry.signedUrl && urls.set(entry.path, entry.signedUrl));
+    }
+    return items.map((i) => fromItem(i, urls.get(i.storage_path))).filter(Boolean);
+  }
 
   return {
     mode: 'remote',
 
     async listPhotos() {
-      // A RLS já garante: fotos públicas + as do próprio usuário.
+      // A RLS entrega: fotos públicas + as do próprio usuário.
       const { data, error } = await supabase
-        .from('photos')
+        .from('items')
         .select('*')
+        .eq('kind', 'photo')
+        .eq('source', 'upload')
         .order('created_at', { ascending: false })
         .limit(200);
       if (error) throw error;
-      return data.map(toPhoto);
+      return toPhotos(data);
     },
 
     async addPhoto({ file, title, category, isPublic, userId }) {
@@ -32,44 +48,92 @@ export function createRemoteRepository(supabase) {
       if (up.error) throw up.error;
 
       const { data, error } = await supabase
-        .from('photos')
-        .insert({ title, category, is_public: isPublic, storage_path: path, width, height })
+        .from('items')
+        .insert({
+          kind: 'photo',
+          title,
+          privacy: isPublic ? 'public' : 'private',
+          storage_path: path,
+          width,
+          height,
+          tags: category ? [category] : [],
+        })
         .select()
         .single();
       if (error) {
         await supabase.storage.from(BUCKET).remove([path]); // não deixa arquivo órfão
         throw error;
       }
-      return toPhoto(data);
+      return (await toPhotos([data]))[0];
     },
 
     async removePhoto(photo) {
       const { data, error } = await supabase
-        .from('photos')
+        .from('items')
         .delete()
         .eq('id', photo.id)
         .select('storage_path')
         .single();
       if (error) throw error;
-      await supabase.storage.from(BUCKET).remove([data.storage_path]);
+      if (data.storage_path) await supabase.storage.from(BUCKET).remove([data.storage_path]);
     },
 
     async listFavorites() {
       const { data, error } = await supabase
-        .from('favorites')
-        .select('photo')
+        .from('reactions')
+        .select('item:items(*)')
+        .eq('kind', 'favorite')
         .order('created_at', { ascending: false });
       if (error) throw error;
-      return data.map((row) => row.photo);
+      return toPhotos(data.map((row) => row.item).filter(Boolean));
     },
 
-    async addFavorite(key, photo) {
-      const { error } = await supabase.from('favorites').upsert({ photo_key: key, photo });
-      if (error) throw error;
+    async addFavorite(_key, photo) {
+      let itemId = photo.id;
+      if (photo.source === 'pexels') {
+        // Foto externa: vira um item (sem dono) para o favorito apontar para algo real.
+        const { data, error } = await supabase.rpc('save_external_item', {
+          p_source: 'pexels',
+          p_external_id: photo.id,
+          p_title: photo.title,
+          p_width: photo.width,
+          p_height: photo.height,
+          p_tags: photo.category ? [photo.category] : [],
+          p_metadata: {
+            url: photo.url,
+            thumb: photo.thumb,
+            color: photo.color,
+            author: photo.author,
+            authorUrl: photo.authorUrl,
+          },
+        });
+        if (error) throw error;
+        itemId = data;
+      }
+      const { error } = await supabase.from('reactions').insert({ item_id: itemId, kind: 'favorite' });
+      if (error && error.code !== DUPLICATE) throw error;
     },
 
     async removeFavorite(key) {
-      const { error } = await supabase.from('favorites').delete().eq('photo_key', key);
+      const [source, ...rest] = key.split(':');
+      const externalOrItemId = rest.join(':');
+      let itemId = externalOrItemId;
+      if (source === 'pexels') {
+        const { data, error } = await supabase
+          .from('items')
+          .select('id')
+          .eq('source', 'pexels')
+          .eq('external_id', externalOrItemId)
+          .maybeSingle();
+        if (error) throw error;
+        if (!data) return;
+        itemId = data.id;
+      }
+      const { error } = await supabase
+        .from('reactions')
+        .delete()
+        .eq('item_id', itemId)
+        .eq('kind', 'favorite');
       if (error) throw error;
     },
   };
