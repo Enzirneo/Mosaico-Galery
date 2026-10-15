@@ -3,6 +3,7 @@ import { Heart, ImageIcon, SearchX, ImageOff } from 'lucide-react';
 import { ToastProvider } from '../components/Toast';
 import Header from '../components/Header';
 import Toolbar from '../components/Toolbar';
+import EnvBadge from '../components/EnvBadge';
 import EmptyState from '../components/EmptyState';
 import { AuthProvider, useAuth } from '../features/auth/AuthProvider';
 import AuthDialog from '../features/auth/AuthDialog';
@@ -155,6 +156,7 @@ function Shell() {
         <UploadDialog onSubmit={library.addPhoto} onClose={closeDialog} showVisibility={auth.enabled} />
       )}
       {dialog?.type === 'auth' && <AuthDialog reason={dialog.reason} onClose={closeDialog} />}
+      <EnvBadge />
     </div>
   );
 }

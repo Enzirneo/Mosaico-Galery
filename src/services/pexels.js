@@ -16,12 +16,13 @@ export async function fetchPexels({ query = '', page = 1, category = null, signa
 
   let url;
   let headers = {};
-  if (supabase) {
-    url = `${env.supabaseUrl}/functions/v1/pexels?${params}`;
-    headers = { apikey: env.supabaseKey, Authorization: `Bearer ${env.supabaseKey}` };
-  } else if (env.pexelsDevKey) {
+  if (env.pexelsDevKey) {
+    // Só em desenvolvimento (em produção esta variável é sempre vazia).
     url = `https://api.pexels.com/v1/${query ? 'search' : 'curated'}?${params}`;
     headers = { Authorization: env.pexelsDevKey };
+  } else if (supabase) {
+    url = `${env.supabaseUrl}/functions/v1/pexels?${params}`;
+    headers = { apikey: env.supabaseKey, Authorization: `Bearer ${env.supabaseKey}` };
   } else {
     throw new PexelsUnavailableError('Nenhuma fonte de fotos configurada.');
   }
